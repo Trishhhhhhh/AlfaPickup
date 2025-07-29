@@ -1,4 +1,5 @@
 {
+  "id": "com.alphapickup.dashboard",
   "name": "AlphaPickup Restaurant Dashboard",
   "short_name": "AlphaPickup",
   "description": "Restaurant pickup order management system",
@@ -25,6 +26,14 @@
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/dashboard-wide.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide"
     }
   ],
   "categories": ["food", "business", "productivity"],
