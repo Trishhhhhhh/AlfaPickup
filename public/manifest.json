@@ -1,0 +1,33 @@
+{
+  "name": "AlphaPickup Restaurant Dashboard",
+  "short_name": "AlphaPickup",
+  "description": "Restaurant pickup order management system",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#EE2E24",
+  "theme_color": "#2E3192",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["food", "business", "productivity"],
+  "lang": "en",
+  "dir": "ltr"
+}
