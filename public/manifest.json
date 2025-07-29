@@ -1,10 +1,11 @@
 {
-  "id": "com.alphapickup.dashboard",
+  "id": "/",
   "name": "AlphaPickup Restaurant Dashboard",
   "short_name": "AlphaPickup",
   "description": "Restaurant pickup order management system",
   "start_url": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#EE2E24",
   "theme_color": "#2E3192",
   "orientation": "portrait-primary",
@@ -36,6 +37,9 @@
       "form_factor": "wide"
     }
   ],
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
   "categories": ["food", "business", "productivity"],
   "lang": "en",
   "dir": "ltr"
