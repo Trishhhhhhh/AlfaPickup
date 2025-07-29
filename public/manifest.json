@@ -1,11 +1,11 @@
 {
-  "id": "/",
+  "id": "com.alphapickup.dashboard",
   "name": "AlphaPickup Restaurant Dashboard",
   "short_name": "AlphaPickup",
   "description": "Restaurant pickup order management system",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#EE2E24",
   "theme_color": "#2E3192",
   "orientation": "portrait-primary",
@@ -37,10 +37,47 @@
       "form_factor": "wide"
     }
   ],
-  "launch_handler": {
-    "client_mode": "navigate-existing"
-  },
   "categories": ["food", "business", "productivity"],
   "lang": "en",
-  "dir": "ltr"
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Go to the restaurant dashboard",
+      "url": "/dashboard",
+      "icons": [
+        {
+          "src": "/android-chrome-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "short_name": "Orders",
+      "description": "Manage active pickup orders",
+      "url": "/order",
+      "icons": [
+        {
+          "src": "/android-chrome-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Admin Panel",
+      "short_name": "Admin",
+      "description": "Open the admin tools",
+      "url": "/admin",
+      "icons": [
+        {
+          "src": "/android-chrome-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
 }
