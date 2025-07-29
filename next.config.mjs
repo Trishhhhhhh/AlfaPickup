@@ -9,7 +9,15 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // PWA configurations
+  // Add rewrites to fix client-side routing for PWA
+  async rewrites() {
+    return [
+      {
+        source: '/:path*',
+        destination: '/',
+      },
+    ];
+  },
   async headers() {
     return [
       {
