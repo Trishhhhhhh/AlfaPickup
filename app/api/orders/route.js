@@ -13,6 +13,7 @@ export async function GET() {
       .select(`
         *,
         customers (
+          id,
           name,
           phone,
           email
@@ -30,38 +31,47 @@ export async function GET() {
 
 export async function POST(request) {
   try {
-    const { customer_id, items, total_amount, pickup_time } = await request.json()
+    const { customer_id, items, total_amount, status = 'pending' } = await request.json()
 
-    const { data, error } = await supabase
+    // Create the order
+    const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert([
         {
           customer_id,
-          items,
           total_amount,
-          pickup_time,
-          status: 'pending'
+          status,
+          items: JSON.stringify(items), // Store items as JSON
+          created_at: new Date().toISOString()
         }
       ])
       .select()
+      .single()
 
-    if (error) throw error
+    if (orderError) throw orderError
 
-    return NextResponse.json({ success: true, data }, { status: 201 })
+    return NextResponse.json({ success: true, data: order }, { status: 201 })
   } catch (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 }
 
-export async function PUT(request) {
+export async function PATCH(request) {
   try {
-    const { id, status } = await request.json()
+    const url = new URL(request.url)
+    const orderId = url.searchParams.get('id')
+    const { status } = await request.json()
+
+    if (!orderId) {
+      return NextResponse.json({ success: false, error: 'Order ID is required' }, { status: 400 })
+    }
 
     const { data, error } = await supabase
       .from('orders')
-      .update({ status })
-      .eq('id', id)
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', orderId)
       .select()
+      .single()
 
     if (error) throw error
 

@@ -41,6 +41,7 @@ export async function POST(request) {
       .from('customers')
       .insert([{ name, phone, email }])
       .select()
+      .single()
 
     if (error) throw error
 

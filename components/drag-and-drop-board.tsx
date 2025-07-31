@@ -1,96 +1,190 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { StatusColumn } from "./status-column"
 import { ModalOrderDetails } from "./modal-order-details"
 import { toast } from "@/hooks/use-toast"
-import { dataStore, type OrderStatus } from "@/lib/data-store"
+import { getOrders, updateOrderStatus } from "@/lib/api"
 import { DndProvider } from "react-dnd"
 import { HTML5Backend } from "react-dnd-html5-backend"
 import { TouchBackend } from "react-dnd-touch-backend"
 
-// Custom DndProvider to support both HTML5 (desktop) and Touch (mobile)
-const MultiBackendDndProvider = ({ children }: { children: React.ReactNode }) => {
-  // Use a simple check for touch support, or a more robust one if needed
+const MultiBackendDndProvider = ({ children }) => {
   const isTouchDevice = typeof window !== "undefined" && ("ontouchstart" in window || navigator.maxTouchPoints > 0)
-
   return <DndProvider backend={isTouchDevice ? TouchBackend : HTML5Backend}>{children}</DndProvider>
 }
 
 export function DragAndDropBoard() {
-  const [orders, setOrders] = useState<any[]>([])
-  const [selectedOrder, setSelectedOrder] = useState<any | null>(null)
+  const [orders, setOrders] = useState([])
+  const [selectedOrder, setSelectedOrder] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const prevReadyOrderIdsRef = useRef(new Set())
 
-  const prevReadyOrderIdsRef = useRef<Set<string>>(new Set())
+  const orderStatuses = ["pending", "preparing", "ready"]
+  const statusDisplayNames = {
+    pending: "New",
+    preparing: "Preparing",
+    ready: "Ready"
+  }
 
-  const orderStatuses: OrderStatus[] = ["New", "Preparing", "Ready"]
+  const loadOrders = async (showRefreshing = false) => {
+    try {
+      if (showRefreshing) setRefreshing(true)
+      const ordersData = await getOrders()
 
-  // Subscribe to real-time updates from the data store
+      const transformedOrders = ordersData.map(order => ({
+        id: order.id,
+        orderNumber: `#${order.id}`,
+        customerName: order.customers?.name || 'Guest',
+        customerPhone: order.customers?.phone || '',
+        customerEmail: order.customers?.email || '',
+        items: order.items.map(item => `${item.quantity}x ${item.name}`),
+        rawItems: order.items,
+        status: order.status,
+        timestamp: order.created_at,
+        totalAmount: parseFloat(order.total_amount),
+        pickupTime: order.pickup_time
+      }))
+
+      setOrders(transformedOrders)
+    } catch (error) {
+      console.error('Error loading orders:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load orders. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
+      if (showRefreshing) setRefreshing(false)
+    }
+  }
+
   useEffect(() => {
-    const unsubscribe = dataStore.onSnapshot((updatedOrders) => {
-      setOrders(updatedOrders)
-    })
-
-    return () => unsubscribe()
+    loadOrders()
+    const interval = setInterval(() => {
+      loadOrders(true)
+    }, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
-    const currentReadyOrders = orders.filter((order) => order.status === "Ready")
-    const currentReadyOrderIds = new Set(currentReadyOrders.map((order) => order.id))
-
-    const newReadyOrders = currentReadyOrders.filter((order) => !prevReadyOrderIdsRef.current.has(order.id))
+    const currentReadyOrders = orders.filter(order => order.status === "ready")
+    const currentReadyOrderIds = new Set(currentReadyOrders.map(order => order.id))
+    const newReadyOrders = currentReadyOrders.filter(order => !prevReadyOrderIdsRef.current.has(order.id))
 
     if (newReadyOrders.length > 0) {
-      // Play sound alert for each new ready order
-      newReadyOrders.forEach((order) => {
+      newReadyOrders.forEach(order => {
         console.log(`Order ${order.orderNumber} is now Ready! Playing sound.`)
-        // Updated to use your specific MP3 file
         const audio = new Audio("/sounds/3-up-2-89189.mp3")
-        audio.play().catch((e) => console.error("Error playing sound:", e))
+        audio.play().catch(e => console.error("Error playing sound:", e))
       })
     }
 
-    // Update the ref with the current ready order IDs for the next render
     prevReadyOrderIdsRef.current = currentReadyOrderIds
   }, [orders])
 
-  const handleOrderClick = (order: any) => {
+  const handleOrderClick = (order) => {
     setSelectedOrder(order)
     setIsModalOpen(true)
   }
 
-  const handleModalSave = (updatedOrder: any) => {
-    dataStore.updateOrder(updatedOrder)
-    toast({
-      title: "Order Updated",
-      description: `Order ${updatedOrder.orderNumber} details saved.`,
-    })
-    setIsModalOpen(false)
-    setSelectedOrder(null)
+  const handleStatusChange = async (orderId, newStatus) => {
+    try {
+      await updateOrderStatus(orderId, newStatus)
+      setOrders(prevOrders =>
+        prevOrders.map(order =>
+          order.id === orderId ? { ...order, status: newStatus } : order
+        )
+      )
+
+      toast({
+        title: "Order Updated",
+        description: `Order moved to ${statusDisplayNames[newStatus]}`,
+      })
+
+      setTimeout(() => loadOrders(true), 1000)
+    } catch (error) {
+      console.error('Error updating order status:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update order status. Please try again.",
+        variant: "destructive"
+      })
+    }
   }
 
-  const getOrdersByStatus = (status: string) => {
-    return orders.filter((order) => order.status === status)
+  const handleModalSave = async (updatedOrder) => {
+    try {
+      if (updatedOrder.status !== selectedOrder.status) {
+        await updateOrderStatus(updatedOrder.id, updatedOrder.status)
+      }
+
+      toast({
+        title: "Order Updated",
+        description: `Order ${updatedOrder.orderNumber} details saved.`,
+      })
+
+      setIsModalOpen(false)
+      setSelectedOrder(null)
+      loadOrders(true)
+    } catch (error) {
+      console.error('Error saving order:', error)
+      toast({
+        title: "Error",
+        description: "Failed to save order changes. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const getOrdersByStatus = (status) => {
+    return orders.filter(order => order.status === status)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-screen bg-gradient-to-br from-soft-purple to-lavender-100 p-6 items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-dark-purple mb-4"></div>
+        <p className="text-dark-purple">Loading orders...</p>
+      </div>
+    )
   }
 
   return (
     <MultiBackendDndProvider>
       <div className="flex flex-col h-screen bg-gradient-to-br from-soft-purple to-lavender-100 p-2 sm:p-4 md:p-6">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center text-dark-purple mb-4 sm:mb-6 md:mb-8">
-          Order Management Dashboard
-        </h1>
-        {/* Fixed 3-column grid for all screen sizes */}
-        <div className="flex-1 grid grid-cols-3 gap-2 sm:gap-4 overflow-y-auto">
+        <div className="flex justify-between items-center mb-4 sm:mb-6 md:mb-8">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-dark-purple">
+            Order Management Dashboard
+          </h1>
+          <div className="flex items-center space-x-4">
+            {refreshing && (
+              <div className="flex items-center text-sm text-gray-600">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-dark-purple mr-2"></div>
+                Refreshing...
+              </div>
+            )}
+            <button
+              onClick={() => loadOrders(true)}
+              className="px-3 py-1 bg-dark-purple text-white rounded-md text-sm hover:bg-opacity-80 transition-colors"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 overflow-y-auto">
           {orderStatuses.map((status) => (
             <StatusColumn
               key={status}
-              title={status}
+              title={statusDisplayNames[status]}
               orders={getOrdersByStatus(status)}
               onClickOrder={handleOrderClick}
-              highlightReady={status === "Ready"}
+              onStatusChange={handleStatusChange}
+              highlightReady={status === "ready"}
             />
           ))}
         </div>
