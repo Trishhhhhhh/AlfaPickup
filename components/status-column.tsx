@@ -31,7 +31,7 @@ export function StatusColumn({
   }
 
   const [{ isOver }, drop] = useDrop(() => ({
-    accept: ItemTypes.ORDER,
+    accept: ItemTypes.ORDER, // Changed from ORDER_CARD to ORDER
     drop: (item: { id: string; currentStatus: string }, monitor) => {
       const newStatus = statusMapping[title] || title.toLowerCase()
       

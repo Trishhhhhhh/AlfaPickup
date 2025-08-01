@@ -1,64 +1,48 @@
-"use client"
+'use client'
 
-import React, { useState, useEffect } from "react"
+import { useState, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Minus, ShoppingCart, Clock, CheckCircle, AlertCircle } from "lucide-react"
-import { getMenuItems, createCustomer, createOrder } from "@/lib/api"
+import { Separator } from "@/components/ui/separator"
+import { ShoppingCart, Plus, Minus, Trash2 } from "lucide-react"
+import { getMenuItems, createCustomer, createOrder } from '@/lib/api'
 
 export default function OrderPage() {
-  const [menuItems, setMenuItems] = useState([]) // Always initialize as array
+  // State declarations
+  const [mounted, setMounted] = useState(false)
+  const [menuItems, setMenuItems] = useState([])
   const [cart, setCart] = useState([])
   const [customer, setCustomer] = useState({ name: "", phone: "", email: "" })
-  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [orderComplete, setOrderComplete] = useState(false)
   const [orderId, setOrderId] = useState(null)
-  const [error, setError] = useState(null) // Add error state
+  const [loading, setLoading] = useState(true)
 
-  // Load menu items on component mount
+  // Hydration fix
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Load menu items
   useEffect(() => {
     loadMenuItems()
   }, [])
 
   const loadMenuItems = async () => {
     try {
-      setError(null)
       const items = await getMenuItems()
-      
-      // Ensure we always get an array
-      if (Array.isArray(items)) {
-        setMenuItems(items)
-      } else if (items && Array.isArray(items.data)) {
-        setMenuItems(items.data) // In case API returns { data: [...] }
-      } else {
-        console.error("API returned non-array data:", items)
-        setMenuItems([]) // Fallback to empty array
-        setError("Invalid menu data received from server")
-      }
+      setMenuItems(items)
     } catch (error) {
-      console.error("Error loading menu:", error)
-      setMenuItems([]) // Ensure it's always an array even on error
-      setError(`Failed to load menu: ${error.message}`)
+      console.error('Failed to load menu items:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  // Group menu items by category - with safety check
-  const groupedItems = Array.isArray(menuItems) ? menuItems.reduce((groups, item) => {
-    const category = item.category || "Other"
-    if (!groups[category]) {
-      groups[category] = []
-    }
-    groups[category].push(item)
-    return groups
-  }, {}) : {}
-
-  // Add item to cart
+  // Cart functions
   const addToCart = (item) => {
     setCart(prevCart => {
       const existingItem = prevCart.find(cartItem => cartItem.id === item.id)
@@ -73,152 +57,161 @@ export default function OrderPage() {
     })
   }
 
-  // Remove item from cart
   const removeFromCart = (itemId) => {
-    setCart(prevCart => {
-      return prevCart.map(cartItem =>
-        cartItem.id === itemId
-          ? { ...cartItem, quantity: Math.max(0, cartItem.quantity - 1) }
-          : cartItem
-      ).filter(cartItem => cartItem.quantity > 0)
-    })
+    setCart(prevCart => prevCart.filter(item => item.id !== itemId))
   }
 
-  // Get item quantity in cart
-  const getItemQuantity = (itemId) => {
-    const cartItem = cart.find(item => item.id === itemId)
-    return cartItem ? cartItem.quantity : 0
+  const updateQuantity = (itemId, newQuantity) => {
+    if (newQuantity <= 0) {
+      removeFromCart(itemId)
+      return
+    }
+    setCart(prevCart =>
+      prevCart.map(item =>
+        item.id === itemId ? { ...item, quantity: newQuantity } : item
+      )
+    )
   }
 
-  // Calculate total
   const calculateTotal = () => {
     return cart.reduce((total, item) => total + (item.price * item.quantity), 0)
   }
 
-  // Submit order
+  // Your exact submitOrder function with debug logging
   const submitOrder = async (e) => {
     e.preventDefault()
     setSubmitting(true)
 
+    console.log('=== ORDER SUBMISSION DEBUG START ===');
+    
     try {
-      // Create or get customer
-      const customerData = await createCustomer({
+      // Log the form data before processing
+      console.log('Form data before processing:', {
+        customer: customer,
+        cart: cart,
+        totalAmount: calculateTotal(),
+      });
+
+      // Step 1: Validate required data
+      if (!customer || !customer.name || !customer.phone) {
+        throw new Error('Customer information is incomplete');
+      }
+
+      if (!cart || cart.length === 0) {
+        throw new Error('Cart is empty');
+      }
+
+      console.log('✅ Data validation passed');
+
+      // Step 2: Prepare customer data
+      const customerData = {
         name: customer.name,
         phone: customer.phone,
         email: customer.email || null
-      })
+      };
 
-      // Prepare order items
+      console.log('Customer data prepared:', customerData);
+
+      // Step 3: Create or get customer
+      console.log('Creating customer...');
+      const customerResponse = await createCustomer(customerData);
+      console.log('✅ Customer created/retrieved:', customerResponse);
+
+      // Step 4: Prepare order items
       const orderItems = cart.map(item => ({
         id: item.id,
         name: item.name,
         price: item.price,
         quantity: item.quantity
-      }))
+      }));
 
-      // Create order
-      const orderData = await createOrder({
-        customer_id: customerData.id,
+      console.log('Order items prepared:', orderItems);
+
+      // Step 5: Prepare order data
+      const orderData = {
+        customer_id: customerResponse.id,
         items: orderItems,
         total_amount: calculateTotal(),
         status: 'pending'
-      })
+      };
 
-      setOrderId(orderData.id)
+      console.log('Order data prepared:', orderData);
+
+      // Step 6: Create order
+      console.log('Creating order...');
+      const orderResponse = await createOrder(orderData);
+      console.log('✅ Order created successfully:', orderResponse);
+
+      // Step 7: Success handling
+      setOrderId(orderResponse.id)
       setOrderComplete(true)
       setCart([])
       setCustomer({ name: "", phone: "", email: "" })
 
     } catch (error) {
-      console.error("Error creating order:", error)
-      alert("Error creating order. Please try again.")
+      console.error('❌ Error creating order:', error);
+      
+      // Detailed error logging
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
+
+      // Check if it's a network error
+      if (error.message.includes('Failed to fetch') || error.message.includes('fetch')) {
+        console.error('🌐 This appears to be a network/API error');
+        console.error('Check if your API routes exist and are working');
+        console.error('Expected API endpoint:', `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api'}/orders`);
+      }
+
+      // Show user-friendly error message
+      alert(`Failed to place order: ${error.message}`)
     } finally {
       setSubmitting(false)
+      console.log('=== ORDER SUBMISSION DEBUG END ===');
     }
   }
 
-  // Reset to place new order
-  const placeNewOrder = () => {
-    setOrderComplete(false)
-    setOrderId(null)
+  // Don't render until mounted (prevents hydration issues)
+  if (!mounted) {
+    return null
   }
 
-  // Add client-side only state to prevent hydration issues
-  const [mounted, setMounted] = useState(false)
-  
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // Prevent hydration mismatch by not rendering until mounted
-  if (!mounted || loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-alfamart-gray to-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-alfamart-red mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading menu...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Show error state if there's an error and no menu items
-  if (error && menuItems.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-alfamart-gray to-white flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-white shadow-xl">
-          <CardHeader className="text-center">
-            <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-            <CardTitle className="text-2xl text-red-600">Error Loading Menu</CardTitle>
-          </CardHeader>
-          <CardContent className="text-center space-y-4">
-            <p className="text-gray-600">{error}</p>
-            <Button 
-              onClick={loadMenuItems}
-              className="w-full bg-alfamart-red hover:bg-alfamart-red-dark"
-            >
-              Try Again
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
+  // Order complete screen
   if (orderComplete) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-alfamart-gray to-white flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-white shadow-xl">
+      <div className="container mx-auto p-4 max-w-2xl">
+        <Card className="bg-green-50 border-green-200">
           <CardHeader className="text-center">
-            <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-            <CardTitle className="text-2xl text-green-600">Order Confirmed!</CardTitle>
+            <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
+              <ShoppingCart className="h-8 w-8 text-green-600" />
+            </div>
+            <CardTitle className="text-2xl text-green-700">Order Placed Successfully!</CardTitle>
+            <CardDescription className="text-green-600">
+              Your order #{orderId} has been received and is being prepared.
+            </CardDescription>
           </CardHeader>
           <CardContent className="text-center space-y-4">
-            <p className="text-gray-600">Your order #{orderId} has been placed successfully.</p>
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <Clock className="h-5 w-5 text-blue-500 inline mr-2" />
-              <span className="text-blue-700">Estimated pickup time: 15-20 minutes</span>
+            <div className="text-sm text-gray-600">
+              You will receive updates about your order status.
             </div>
-            <p className="text-sm text-gray-500">
-              We'll prepare your order and notify you when it's ready for pickup.
-            </p>
-            <div className="space-y-2">
+            <div className="flex flex-col sm:flex-row gap-3">
               <Button 
-                onClick={placeNewOrder}
-                className="w-full bg-alfamart-red hover:bg-alfamart-red-dark"
+                onClick={() => window.location.href = `/track-order?id=${orderId}`}
+                className="flex-1"
               >
-                Place Another Order
+                Track Your Order
               </Button>
               <Button 
                 variant="outline" 
-                className="w-full"
                 onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    window.location.href = '/ready-board'
-                  }
+                  setOrderComplete(false)
+                  setOrderId(null)
                 }}
+                className="flex-1"
               >
-                View Pickup Board
+                Place Another Order
               </Button>
             </div>
           </CardContent>
@@ -228,170 +221,206 @@ export default function OrderPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-alfamart-gray to-white p-4">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto p-4">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-alfamart-red mb-2">Place Your Order</h1>
-          <p className="text-gray-600">Select items from our menu and place your pickup order</p>
-          {error && (
-            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-yellow-800 text-sm">{error}</p>
-            </div>
-          )}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Place Your Order</h1>
+          <p className="text-gray-600">Select items from our menu and provide your details</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Menu Items */}
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Menu Section - Takes 2 columns */}
           <div className="lg:col-span-2">
-            {Object.keys(groupedItems).length === 0 ? (
-              <Card className="bg-white shadow-md">
-                <CardContent className="text-center py-8">
-                  <p className="text-gray-500">No menu items available at the moment.</p>
-                  <Button 
-                    onClick={loadMenuItems}
-                    className="mt-4 bg-alfamart-red hover:bg-alfamart-red-dark"
-                  >
-                    Refresh Menu
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-6">
-                {Object.entries(groupedItems).map(([category, items]) => (
-                  <div key={category}>
-                    <h2 className="text-2xl font-semibold text-alfamart-blue mb-4">{category}</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {items.map((item) => (
-                        <Card key={item.id} className="bg-white shadow-md hover:shadow-lg transition-shadow">
-                          <CardContent className="p-4">
-                            <div className="flex justify-between items-start mb-2">
-                              <h3 className="font-semibold text-lg">{item.name}</h3>
-                              <Badge variant={item.available ? "default" : "secondary"}>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShoppingCart className="h-6 w-6" />
+                  Menu Items
+                </CardTitle>
+                <CardDescription>
+                  Select items to add to your cart
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading menu items...</p>
+                    </div>
+                  </div>
+                ) : menuItems.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-gray-500">No menu items available at the moment.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {menuItems.map((item) => (
+                      <Card key={item.id} className="p-4 hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-lg mb-1">{item.name}</h3>
+                            <p className="text-sm text-gray-600 mb-3">{item.description}</p>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="text-lg font-medium">
+                                ₱{item.price}
+                              </Badge>
+                              <Badge 
+                                variant={item.available ? "default" : "destructive"}
+                              >
                                 {item.available ? "Available" : "Out of Stock"}
                               </Badge>
+                              {item.category && (
+                                <Badge variant="outline">{item.category}</Badge>
+                              )}
                             </div>
-                            <p className="text-gray-600 text-sm mb-3">{item.description}</p>
-                            <div className="flex justify-between items-center">
-                              <span className="text-xl font-bold text-alfamart-red">
-                                ₱{parseFloat(item.price).toFixed(2)}
-                              </span>
-                              <div className="flex items-center space-x-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => removeFromCart(item.id)}
-                                  disabled={!item.available || getItemQuantity(item.id) === 0}
-                                >
-                                  <Minus className="h-4 w-4" />
-                                </Button>
-                                <span className="w-8 text-center font-semibold">
-                                  {getItemQuantity(item.id)}
-                                </span>
-                                <Button
-                                  size="sm"
-                                  onClick={() => addToCart(item)}
-                                  disabled={!item.available}
-                                  className="bg-alfamart-red hover:bg-alfamart-red-dark"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Cart and Customer Info */}
-          <div className="lg:col-span-1">
-            <Card className="bg-white shadow-lg sticky top-4">
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <ShoppingCart className="h-5 w-5 mr-2" />
-                  Your Order ({cart.length} items)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Cart Items */}
-                {cart.length === 0 ? (
-                  <p className="text-gray-500 text-center py-4">Your cart is empty</p>
-                ) : (
-                  <div className="space-y-2">
-                    {cart.map((item) => (
-                      <div key={item.id} className="flex justify-between items-center py-2 border-b">
-                        <div>
-                          <p className="font-medium">{item.name}</p>
-                          <p className="text-sm text-gray-500">₱{parseFloat(item.price).toFixed(2)} x {item.quantity}</p>
+                          </div>
+                          <Button 
+                            onClick={() => addToCart(item)}
+                            disabled={!item.available}
+                            size="sm"
+                            className="ml-4"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <p className="font-semibold">
-                          ₱{(parseFloat(item.price) * item.quantity).toFixed(2)}
-                        </p>
-                      </div>
+                      </Card>
                     ))}
-                    <div className="flex justify-between items-center py-2 font-bold text-lg border-t">
-                      <span>Total:</span>
-                      <span className="text-alfamart-red">₱{calculateTotal().toFixed(2)}</span>
-                    </div>
                   </div>
-                )}
-
-                {/* Customer Information Form */}
-                {cart.length > 0 && (
-                  <form onSubmit={submitOrder} className="space-y-4 pt-4 border-t">
-                    <h3 className="font-semibold text-lg">Customer Information</h3>
-                    
-                    <div>
-                      <Label htmlFor="customerName">Name *</Label>
-                      <Input
-                        id="customerName"
-                        type="text"
-                        value={customer.name}
-                        onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
-                        required
-                        placeholder="Enter your full name"
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="customerPhone">Phone Number *</Label>
-                      <Input
-                        id="customerPhone"
-                        type="tel"
-                        value={customer.phone}
-                        onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
-                        required
-                        placeholder="09XXXXXXXXX"
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="customerEmail">Email (Optional)</Label>
-                      <Input
-                        id="customerEmail"
-                        type="email"
-                        value={customer.email}
-                        onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
-                        placeholder="your@email.com"
-                      />
-                    </div>
-
-                    <Button
-                      type="submit"
-                      className="w-full bg-alfamart-red hover:bg-alfamart-red-dark"
-                      disabled={submitting || cart.length === 0}
-                    >
-                      {submitting ? "Placing Order..." : `Place Order - ₱${calculateTotal().toFixed(2)}`}
-                    </Button>
-                  </form>
                 )}
               </CardContent>
             </Card>
+          </div>
+
+          {/* Cart and Order Section - Takes 1 column */}
+          <div className="space-y-6">
+            {/* Cart */}
+            <Card className="sticky top-4">
+              <CardHeader>
+                <CardTitle>Your Cart</CardTitle>
+                <CardDescription>
+                  {cart.length} {cart.length === 1 ? 'item' : 'items'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {cart.length === 0 ? (
+                  <div className="text-center py-8">
+                    <ShoppingCart className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">Your cart is empty</p>
+                    <p className="text-sm text-gray-400">Add items from the menu</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {cart.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between border-b pb-4">
+                        <div className="flex-1">
+                          <h4 className="font-medium">{item.name}</h4>
+                          <p className="text-sm text-gray-600">₱{item.price} each</p>
+                          <p className="text-sm font-medium text-gray-800">
+                            Subtotal: ₱{(item.price * item.quantity).toFixed(2)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                          >
+                            <Minus className="h-4 w-4" />
+                          </Button>
+                          <span className="w-8 text-center font-medium">{item.quantity}</span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => removeFromCart(item.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    <Separator />
+                    <div className="flex justify-between items-center font-semibold text-lg">
+                      <span>Total:</span>
+                      <span className="text-xl">₱{calculateTotal().toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Customer Information */}
+            {cart.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Customer Information</CardTitle>
+                  <CardDescription>
+                    Please provide your details to complete the order
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={submitOrder} className="space-y-4">
+                    <div>
+                      <Label htmlFor="name">Full Name *</Label>
+                      <Input
+                        id="name"
+                        placeholder="Enter your full name"
+                        value={customer.name}
+                        onChange={(e) => setCustomer({...customer, name: e.target.value})}
+                        required
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="phone">Phone Number *</Label>
+                      <Input
+                        id="phone"
+                        type="tel"
+                        placeholder="09XX XXX XXXX"
+                        value={customer.phone}
+                        onChange={(e) => setCustomer({...customer, phone: e.target.value})}
+                        required
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="email">Email (Optional)</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="your@email.com"
+                        value={customer.email}
+                        onChange={(e) => setCustomer({...customer, email: e.target.value})}
+                        className="mt-1"
+                      />
+                    </div>
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      disabled={submitting || cart.length === 0}
+                      size="lg"
+                    >
+                      {submitting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Placing Order...
+                        </>
+                      ) : (
+                        `Place Order - ₱${calculateTotal().toFixed(2)}`
+                      )}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>

@@ -32,22 +32,54 @@ export function DragAndDropBoard() {
   const loadOrders = async (showRefreshing = false) => {
     try {
       if (showRefreshing) setRefreshing(true)
-      const ordersData = await getOrders()
+      console.log('Loading orders...')
+      
+      const apiResponse = await getOrders()
+      console.log('API Response:', apiResponse)
+      
+      // Handle the API response format { success: true, data: [...] }
+      let ordersData = []
+      if (apiResponse && apiResponse.success && Array.isArray(apiResponse.data)) {
+        ordersData = apiResponse.data
+      } else if (Array.isArray(apiResponse)) {
+        ordersData = apiResponse
+      } else {
+        console.error('Unexpected API response format:', apiResponse)
+        throw new Error('Invalid response format from orders API')
+      }
 
-      const transformedOrders = ordersData.map(order => ({
-        id: order.id,
-        orderNumber: `#${order.id}`,
-        customerName: order.customers?.name || 'Guest',
-        customerPhone: order.customers?.phone || '',
-        customerEmail: order.customers?.email || '',
-        items: order.items.map(item => `${item.quantity}x ${item.name}`),
-        rawItems: order.items,
-        status: order.status,
-        timestamp: order.created_at,
-        totalAmount: parseFloat(order.total_amount),
-        pickupTime: order.pickup_time
-      }))
+      console.log('Processing orders data:', ordersData)
 
+      const transformedOrders = ordersData.map(order => {
+        // Parse items if they're stored as JSON string
+        let parsedItems = []
+        try {
+          if (typeof order.items === 'string') {
+            parsedItems = JSON.parse(order.items)
+          } else if (Array.isArray(order.items)) {
+            parsedItems = order.items
+          }
+        } catch (e) {
+          console.error('Error parsing items for order:', order.id, e)
+          parsedItems = []
+        }
+
+        return {
+          id: order.id,
+          orderNumber: `#${order.id.slice(0, 8)}`,
+          customerName: order.customers?.name || 'Guest',
+          customerPhone: order.customers?.phone || '',
+          customerEmail: order.customers?.email || '',
+          items: parsedItems.map(item => `${item.quantity || 1}x ${item.name || 'Unknown Item'}`),
+          rawItems: parsedItems,
+          status: order.status || 'pending',
+          timestamp: order.created_at,
+          totalAmount: parseFloat(order.total_amount || 0),
+          pickupTime: order.pickup_time
+        }
+      })
+
+      console.log('Transformed orders:', transformedOrders)
       setOrders(transformedOrders)
     } catch (error) {
       console.error('Error loading orders:', error)
@@ -56,6 +88,8 @@ export function DragAndDropBoard() {
         description: "Failed to load orders. Please try again.",
         variant: "destructive"
       })
+      // Set empty array to prevent further errors
+      setOrders([])
     } finally {
       setLoading(false)
       if (showRefreshing) setRefreshing(false)
