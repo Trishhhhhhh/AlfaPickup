@@ -4,21 +4,39 @@ import React, { useEffect, useState } from "react"
 import { useDataStore } from "@/lib/stores/dataStore"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+
+interface OrderItem {
+  name: string
+  quantity: number
+}
+
+interface Order {
+  id: string
+  orderNumber: string
+  status: string
+  items?: OrderItem[]
+}
 
 export function AdminOrderTable() {
   const dataStore = useDataStore()
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("All")
-  const [allOrders, setAllOrders] = useState<any[]>([])
+  const [allOrders, setAllOrders] = useState<Order[]>([])
 
   useEffect(() => {
-    const unsubscribe = dataStore.onSnapshot((updatedOrders) => {
+    const unsubscribe = dataStore.onSnapshot((updatedOrders: Order[]) => {
       setAllOrders(updatedOrders)
     })
     return () => unsubscribe()
-  }, [])
+  }, [dataStore])
 
   const filtered = allOrders.filter((order) => {
     const matchesSearch = order.orderNumber
@@ -27,7 +45,7 @@ export function AdminOrderTable() {
     const matchesStatus =
       statusFilter === "All" ||
       order.status === statusFilter ||
-      (statusFilter === "Ready" && order.status.toLowerCase() === "ready") // ✅ Fix here
+      (statusFilter === "Ready" && order.status.toLowerCase() === "ready")
     return matchesSearch && matchesStatus
   })
 
@@ -67,7 +85,7 @@ export function AdminOrderTable() {
                   <Badge variant="outline">{order.status}</Badge>
                 </div>
                 <div>
-                  {order.items?.map((item: any, index: number) => (
+                  {order.items?.map((item, index) => (
                     <p key={index}>
                       {item.name} × {item.quantity}
                     </p>
