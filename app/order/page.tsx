@@ -9,9 +9,86 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ShoppingCart, Plus, Minus, Trash2 } from "lucide-react"
 import { getMenuItems, createCustomer, createOrder } from '@/lib/api'
+import { PrintService } from '@/lib/printService'
+
+// 🔍 DEBUG COMPONENT - TEMPORARY
+const DebugInfo = () => {
+  const [debugInfo, setDebugInfo] = useState('')
+  
+  const runDebugTest = () => {
+    const info = []
+    info.push('=== PDA DEBUG INFO ===')
+    info.push(`Hostname: ${window.location.hostname}`)
+    info.push(`User Agent: ${navigator.userAgent.substring(0, 50)}...`)
+    info.push('')
+    
+    // Check for printer bridges
+    const bridges = [
+      'Android', 'printer', 'device', 'sunmi', 
+      'newland', 'urovo', 'citaq', 'pos'
+    ]
+    
+    bridges.forEach(bridge => {
+      const exists = !!window[bridge]
+      const hasFunc = window[bridge]?.printText || window[bridge]?.print
+      info.push(`${bridge}: ${exists ? '✅' : '❌'} ${hasFunc ? '(has print)' : ''}`)
+    })
+    
+    info.push('')
+    info.push('Available window properties:')
+    const props = Object.keys(window).filter(key => 
+      key.toLowerCase().includes('print') || 
+      key.toLowerCase().includes('android') ||
+      key.toLowerCase().includes('device')
+    )
+    info.push(props.join(', ') || 'None found')
+    
+    // Test PrintService detection
+    info.push('')
+    info.push(`PrintService.isAndroidPDA(): ${PrintService.isAndroidPDA()}`)
+    
+    setDebugInfo(info.join('\n'))
+  }
+  
+  const testPrint = () => {
+    const testData = {
+      id: 'DEBUG-001',
+      customerName: 'Debug Test',
+      customerPhone: '09123456789',
+      items: [{ name: 'Test Item', quantity: 1, price: 50 }],
+      total: 50
+    }
+    
+    alert('🔍 Testing print... Check console and watch for alerts!')
+    PrintService.printReceipt(testData)
+  }
+  
+  return (
+    <Card className="mb-4 bg-yellow-50 border-yellow-200">
+      <CardHeader>
+        <CardTitle className="text-sm">🔍 Debug Mode (Remove Later)</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex gap-2">
+          <Button onClick={runDebugTest} size="sm" variant="outline">
+            Check PDA Info
+          </Button>
+          <Button onClick={testPrint} size="sm" variant="outline">
+            Test Print
+          </Button>
+        </div>
+        
+        {debugInfo && (
+          <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-40">
+            {debugInfo}
+          </pre>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 export default function OrderPage() {
-  // State declarations
   const [mounted, setMounted] = useState(false)
   const [menuItems, setMenuItems] = useState([])
   const [cart, setCart] = useState([])
@@ -20,14 +97,10 @@ export default function OrderPage() {
   const [orderComplete, setOrderComplete] = useState(false)
   const [orderId, setOrderId] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
 
-  // Hydration fix
   useEffect(() => {
     setMounted(true)
-  }, [])
-
-  // Load menu items
-  useEffect(() => {
     loadMenuItems()
   }, [])
 
@@ -42,7 +115,6 @@ export default function OrderPage() {
     }
   }
 
-  // Cart functions
   const addToCart = (item) => {
     setCart(prevCart => {
       const existingItem = prevCart.find(cartItem => cartItem.id === item.id)
@@ -62,10 +134,7 @@ export default function OrderPage() {
   }
 
   const updateQuantity = (itemId, newQuantity) => {
-    if (newQuantity <= 0) {
-      removeFromCart(itemId)
-      return
-    }
+    if (newQuantity <= 0) return removeFromCart(itemId)
     setCart(prevCart =>
       prevCart.map(item =>
         item.id === itemId ? { ...item, quantity: newQuantity } : item
@@ -77,109 +146,87 @@ export default function OrderPage() {
     return cart.reduce((total, item) => total + (item.price * item.quantity), 0)
   }
 
-  // Your exact submitOrder function with debug logging
   const submitOrder = async (e) => {
     e.preventDefault()
     setSubmitting(true)
 
-    console.log('=== ORDER SUBMISSION DEBUG START ===');
-    
     try {
-      // Log the form data before processing
-      console.log('Form data before processing:', {
-        customer: customer,
-        cart: cart,
-        totalAmount: calculateTotal(),
-      });
+      if (!customer.name || !customer.phone) throw new Error('Customer information is incomplete')
+      if (!cart.length) throw new Error('Cart is empty')
 
-      // Step 1: Validate required data
-      if (!customer || !customer.name || !customer.phone) {
-        throw new Error('Customer information is incomplete');
-      }
-
-      if (!cart || cart.length === 0) {
-        throw new Error('Cart is empty');
-      }
-
-      console.log('✅ Data validation passed');
-
-      // Step 2: Prepare customer data
       const customerData = {
         name: customer.name,
         phone: customer.phone,
         email: customer.email || null
-      };
+      }
 
-      console.log('Customer data prepared:', customerData);
+      const customerResponse = await createCustomer(customerData)
 
-      // Step 3: Create or get customer
-      console.log('Creating customer...');
-      const customerResponse = await createCustomer(customerData);
-      console.log('✅ Customer created/retrieved:', customerResponse);
-
-      // Step 4: Prepare order items
-      const orderItems = cart.map(item => ({
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity
-      }));
-
-      console.log('Order items prepared:', orderItems);
-
-      // Step 5: Prepare order data
       const orderData = {
         customer_id: customerResponse.id,
-        items: orderItems,
+        items: cart.map(item => ({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity
+        })),
         total_amount: calculateTotal(),
         status: 'pending'
-      };
+      }
 
-      console.log('Order data prepared:', orderData);
+      const orderResponse = await createOrder(orderData)
 
-      // Step 6: Create order
-      console.log('Creating order...');
-      const orderResponse = await createOrder(orderData);
-      console.log('✅ Order created successfully:', orderResponse);
+      // 🖨️ AUTOMATIC RECEIPT PRINTING
+      const receiptData = {
+        id: orderResponse.id,
+        customerName: customer.name,
+        customerPhone: customer.phone,
+        items: cart.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price
+        })),
+        total: calculateTotal()
+      }
+      
+      // Print receipt automatically
+      console.log('🖨️ Printing receipt for order:', orderResponse.id)
+      alert(`🖨️ About to print receipt for order: ${orderResponse.id}`)
+      await PrintService.printReceipt(receiptData)
 
-      // Step 7: Success handling
       setOrderId(orderResponse.id)
       setOrderComplete(true)
       setCart([])
       setCustomer({ name: "", phone: "", email: "" })
-
     } catch (error) {
-      console.error('❌ Error creating order:', error);
-      
-      // Detailed error logging
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-      });
-
-      // Check if it's a network error
-      if (error.message.includes('Failed to fetch') || error.message.includes('fetch')) {
-        console.error('🌐 This appears to be a network/API error');
-        console.error('Check if your API routes exist and are working');
-        console.error('Expected API endpoint:', `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api'}/orders`);
-      }
-
-      // Show user-friendly error message
+      console.error('❌ Error creating order:', error)
       alert(`Failed to place order: ${error.message}`)
     } finally {
       setSubmitting(false)
-      console.log('=== ORDER SUBMISSION DEBUG END ===');
     }
   }
 
-  // Don't render until mounted (prevents hydration issues)
-  if (!mounted) {
-    return null
-  }
+  if (!mounted) return null
 
-  // Order complete screen
   if (orderComplete) {
+    const handleManualPrint = async () => {
+      const receiptData = {
+        id: orderId,
+        customerName: customer.name || 'Previous Customer',
+        customerPhone: customer.phone || '09123456789',
+        items: [{ name: 'Previous Order Items', quantity: 1, price: 100 }],
+        total: 100
+      }
+      
+      alert('🖨️ Manual print test...')
+      const success = await PrintService.printReceipt(receiptData)
+      if (success) {
+        alert('✅ Manual print completed!')
+      } else {
+        alert('❌ Manual print failed!')
+      }
+    }
+
     return (
       <div className="container mx-auto p-4 max-w-2xl">
         <Card className="bg-green-50 border-green-200">
@@ -196,21 +243,24 @@ export default function OrderPage() {
             <div className="text-sm text-gray-600">
               You will receive updates about your order status.
             </div>
+            
+            {/* 🖨️ MANUAL PRINT BUTTON */}
+            <Button 
+              onClick={handleManualPrint} 
+              variant="outline" 
+              className="w-full mb-4 border-blue-300 text-blue-600 hover:bg-blue-50"
+            >
+              🖨️ Print Receipt Again
+            </Button>
+            
             <div className="flex flex-col sm:flex-row gap-3">
-              <Button 
-                onClick={() => window.location.href = `/track-order?id=${orderId}`}
-                className="flex-1"
-              >
+              <Button onClick={() => window.location.href = `/track-order?id=${orderId}`} className="flex-1">
                 Track Your Order
               </Button>
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setOrderComplete(false)
-                  setOrderId(null)
-                }}
-                className="flex-1"
-              >
+              <Button variant="outline" onClick={() => {
+                setOrderComplete(false)
+                setOrderId(null)
+              }} className="flex-1">
                 Place Another Order
               </Button>
             </div>
@@ -223,14 +273,15 @@ export default function OrderPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto p-4">
-        {/* Header */}
+        {/* 🔍 DEBUG COMPONENT - TEMPORARY */}
+        <DebugInfo />
+
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Place Your Order</h1>
           <p className="text-gray-600">Select items from our menu and provide your details</p>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Menu Section - Takes 2 columns */}
           <div className="lg:col-span-2">
             <Card>
               <CardHeader>
@@ -238,189 +289,135 @@ export default function OrderPage() {
                   <ShoppingCart className="h-6 w-6" />
                   Menu Items
                 </CardTitle>
-                <CardDescription>
-                  Select items to add to your cart
-                </CardDescription>
+                <CardDescription>Select items to add to your cart</CardDescription>
               </CardHeader>
               <CardContent>
+                <Input
+                  type="text"
+                  placeholder="Search menu..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="mb-4"
+                />
                 {loading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                      <p className="text-gray-600">Loading menu items...</p>
-                    </div>
-                  </div>
-                ) : menuItems.length === 0 ? (
-                  <div className="text-center py-12">
-                    <p className="text-gray-500">No menu items available at the moment.</p>
-                  </div>
+                  <p>Loading menu items...</p>
                 ) : (
                   <div className="grid gap-4">
-                    {menuItems.map((item) => (
-                      <Card key={item.id} className="p-4 hover:shadow-md transition-shadow">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-lg mb-1">{item.name}</h3>
-                            <p className="text-sm text-gray-600 mb-3">{item.description}</p>
-                            <div className="flex items-center gap-2">
-                              <Badge variant="secondary" className="text-lg font-medium">
-                                ₱{item.price}
-                              </Badge>
-                              <Badge 
-                                variant={item.available ? "default" : "destructive"}
-                              >
-                                {item.available ? "Available" : "Out of Stock"}
-                              </Badge>
-                              {item.category && (
-                                <Badge variant="outline">{item.category}</Badge>
-                              )}
+                    {menuItems
+                      .filter(item => item.name.toLowerCase().includes(search.toLowerCase()))
+                      .map((item) => (
+                        <Card key={item.id} className="p-4">
+                          <div className="flex gap-4">
+                            {/* ✅ Menu image using item.image_url */}
+                            {item.image_url && (
+                              <img
+                                src={item.image_url}
+                                alt={item.name}
+                                className="w-24 h-24 object-cover rounded"
+                              />
+                            )}
+                            <div className="flex-1">
+                              <h3 className="text-lg font-semibold">{item.name}</h3>
+                              <p className="text-sm text-gray-600 mb-1">{item.description}</p>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary">₱{item.price}</Badge>
+                                {item.category && <Badge>{item.category}</Badge>}
+                              </div>
                             </div>
+                            <Button
+                              onClick={() => addToCart(item)}
+                              size="sm"
+                              disabled={!item.available}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
                           </div>
-                          <Button 
-                            onClick={() => addToCart(item)}
-                            disabled={!item.available}
-                            size="sm"
-                            className="ml-4"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </Card>
-                    ))}
+                        </Card>
+                      ))}
                   </div>
                 )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Cart and Order Section - Takes 1 column */}
-          <div className="space-y-6">
-            {/* Cart */}
-            <Card className="sticky top-4">
+          <div>
+            <Card>
               <CardHeader>
                 <CardTitle>Your Cart</CardTitle>
-                <CardDescription>
-                  {cart.length} {cart.length === 1 ? 'item' : 'items'}
-                </CardDescription>
               </CardHeader>
               <CardContent>
                 {cart.length === 0 ? (
-                  <div className="text-center py-8">
-                    <ShoppingCart className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500">Your cart is empty</p>
-                    <p className="text-sm text-gray-400">Add items from the menu</p>
-                  </div>
+                  <p className="text-gray-500">Your cart is empty.</p>
                 ) : (
                   <div className="space-y-4">
                     {cart.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between border-b pb-4">
-                        <div className="flex-1">
-                          <h4 className="font-medium">{item.name}</h4>
-                          <p className="text-sm text-gray-600">₱{item.price} each</p>
-                          <p className="text-sm font-medium text-gray-800">
-                            Subtotal: ₱{(item.price * item.quantity).toFixed(2)}
-                          </p>
+                      <div key={item.id} className="flex justify-between items-center">
+                        <div>
+                          <h4 className="font-semibold">{item.name}</h4>
+                          <p className="text-sm text-gray-600">₱{item.price} × {item.quantity}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          >
+                          <Button size="icon" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
                             <Minus className="h-4 w-4" />
                           </Button>
-                          <span className="w-8 text-center font-medium">{item.quantity}</span>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          >
+                          <span>{item.quantity}</span>
+                          <Button size="icon" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
                             <Plus className="h-4 w-4" />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => removeFromCart(item.id)}
-                          >
+                          <Button size="icon" variant="destructive" onClick={() => removeFromCart(item.id)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
                     ))}
                     <Separator />
-                    <div className="flex justify-between items-center font-semibold text-lg">
+                    <div className="flex justify-between font-semibold">
                       <span>Total:</span>
-                      <span className="text-xl">₱{calculateTotal().toFixed(2)}</span>
+                      <span>₱{calculateTotal()}</span>
                     </div>
                   </div>
                 )}
               </CardContent>
             </Card>
 
-            {/* Customer Information */}
-            {cart.length > 0 && (
+            <form onSubmit={submitOrder} className="mt-6 space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>Customer Information</CardTitle>
-                  <CardDescription>
-                    Please provide your details to complete the order
-                  </CardDescription>
+                  <CardTitle>Customer Info</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <form onSubmit={submitOrder} className="space-y-4">
-                    <div>
-                      <Label htmlFor="name">Full Name *</Label>
-                      <Input
-                        id="name"
-                        placeholder="Enter your full name"
-                        value={customer.name}
-                        onChange={(e) => setCustomer({...customer, name: e.target.value})}
-                        required
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="phone">Phone Number *</Label>
-                      <Input
-                        id="phone"
-                        type="tel"
-                        placeholder="09XX XXX XXXX"
-                        value={customer.phone}
-                        onChange={(e) => setCustomer({...customer, phone: e.target.value})}
-                        required
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="email">Email (Optional)</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="your@email.com"
-                        value={customer.email}
-                        onChange={(e) => setCustomer({...customer, email: e.target.value})}
-                        className="mt-1"
-                      />
-                    </div>
-                    <Button 
-                      type="submit" 
-                      className="w-full" 
-                      disabled={submitting || cart.length === 0}
-                      size="lg"
-                    >
-                      {submitting ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Placing Order...
-                        </>
-                      ) : (
-                        `Place Order - ₱${calculateTotal().toFixed(2)}`
-                      )}
-                    </Button>
-                  </form>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="name">Name</Label>
+                    <Input
+                      id="name"
+                      value={customer.name}
+                      onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="phone">Phone</Label>
+                    <Input
+                      id="phone"
+                      value={customer.phone}
+                      onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="email">Email (optional)</Label>
+                    <Input
+                      id="email"
+                      value={customer.email}
+                      onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
+                    />
+                  </div>
                 </CardContent>
               </Card>
-            )}
+              <Button type="submit" className="w-full" disabled={submitting}>
+                {submitting ? 'Placing Order...' : 'Place Order'}
+              </Button>
+            </form>
           </div>
         </div>
       </div>
