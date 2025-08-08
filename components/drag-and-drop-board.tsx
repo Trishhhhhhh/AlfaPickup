@@ -20,6 +20,7 @@ export function DragAndDropBoard() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [updatingOrderId, setUpdatingOrderId] = useState(null) // Track which order is being updated
   const prevReadyOrderIdsRef = useRef(new Set())
 
   const orderStatuses = ["pending", "preparing", "ready"]
@@ -70,6 +71,7 @@ export function DragAndDropBoard() {
           customerName: order.customers?.name || 'Guest',
           customerPhone: order.customers?.phone || '',
           customerEmail: order.customers?.email || '',
+          contactNumber: order.customers?.phone || 'N/A', // Add this for OrderCard compatibility
           items: parsedItems.map(item => `${item.quantity || 1}x ${item.name || 'Unknown Item'}`),
           rawItems: parsedItems,
           status: order.status || 'pending',
@@ -127,26 +129,48 @@ export function DragAndDropBoard() {
 
   const handleStatusChange = async (orderId, newStatus) => {
     try {
-      await updateOrderStatus(orderId, newStatus)
+      setUpdatingOrderId(orderId) // Set loading state for this specific order
+      
+      console.log(`Updating order ${orderId} status to ${newStatus}`)
+      
+      // Optimistically update the UI first for immediate feedback
       setOrders(prevOrders =>
         prevOrders.map(order =>
           order.id === orderId ? { ...order, status: newStatus } : order
         )
       )
 
+      // Update the database
+      const result = await updateOrderStatus(orderId, newStatus)
+      console.log('Database update result:', result)
+
+      // Show success message
       toast({
-        title: "Order Updated",
+        title: "Success",
         description: `Order moved to ${statusDisplayNames[newStatus]}`,
       })
 
-      setTimeout(() => loadOrders(true), 1000)
+      // Refresh orders after a short delay to ensure consistency with database
+      setTimeout(() => {
+        loadOrders(true)
+      }, 1000)
+
     } catch (error) {
       console.error('Error updating order status:', error)
+      
+      // Revert optimistic update on error by reloading data
+      loadOrders(true)
+      
       toast({
         title: "Error",
         description: "Failed to update order status. Please try again.",
         variant: "destructive"
       })
+    } finally {
+      // Clear updating state after a delay to show success feedback
+      setTimeout(() => {
+        setUpdatingOrderId(null)
+      }, 1500)
     }
   }
 
@@ -201,6 +225,12 @@ export function DragAndDropBoard() {
                 Refreshing...
               </div>
             )}
+            {updatingOrderId && (
+              <div className="flex items-center text-sm text-blue-600">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                Updating order...
+              </div>
+            )}
             <button
               onClick={() => loadOrders(true)}
               className="px-3 py-1 bg-dark-purple text-white rounded-md text-sm hover:bg-opacity-80 transition-colors"
@@ -219,6 +249,7 @@ export function DragAndDropBoard() {
               onClickOrder={handleOrderClick}
               onStatusChange={handleStatusChange}
               highlightReady={status === "ready"}
+              updatingOrderId={updatingOrderId} // Pass the updating order ID
             />
           ))}
         </div>
