@@ -68,55 +68,142 @@ export function StatusColumn({
     }
   }
 
+  // Mobile-optimized Alfamart-themed column colors
+  const getColumnTheme = () => {
+    switch (status) {
+      case "pending":
+        return {
+          bg: "bg-gradient-to-b from-alfamart-blue-light/90 to-white",
+          border: "border-alfamart-blue/50",
+          icon: "bg-alfamart-blue",
+          dragOverBg: "bg-alfamart-blue-light border-alfamart-blue shadow-lg",
+          headerBg: "bg-alfamart-blue-light/70 border-alfamart-blue/40",
+          textColor: "text-alfamart-blue",
+        }
+      case "preparing":
+        return {
+          bg: "bg-gradient-to-b from-alfamart-red-light/90 to-white",
+          border: "border-alfamart-red/50",
+          icon: "bg-alfamart-red",
+          dragOverBg: "bg-alfamart-red-light border-alfamart-red shadow-lg",
+          headerBg: "bg-alfamart-red-light/70 border-alfamart-red/40",
+          textColor: "text-alfamart-red",
+        }
+      case "ready":
+        return {
+          bg: "bg-gradient-to-b from-green-100/90 to-white",
+          border: "border-green-400/50",
+          icon: "bg-green-500",
+          dragOverBg: "bg-green-200 border-green-400 shadow-lg",
+          headerBg: "bg-green-100/70 border-green-300/40",
+          textColor: "text-green-700",
+        }
+      default:
+        return {
+          bg: "bg-white",
+          border: "border-gray-200",
+          icon: "bg-gray-500",
+          dragOverBg: "bg-gray-100 border-gray-300",
+          headerBg: "bg-gray-50 border-gray-200",
+          textColor: "text-gray-700",
+        }
+    }
+  }
+
+  const theme = getColumnTheme()
+
   return (
-    <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border min-w-0 max-h-full">
-      {/* Column Header - More compact with smaller fonts */}
-      <div className="flex items-center gap-1 p-1.5 border-b flex-shrink-0">
-        <div className="w-2 h-2">
-          {title === "New Orders" && <div className="w-2 h-2 rounded-full bg-blue-500"></div>}
-          {title === "Preparing" && <div className="w-2 h-2 rounded-full bg-orange-500"></div>}
-          {title === "Ready" && <div className="w-2 h-2 rounded-full bg-green-500"></div>}
-        </div>
-        <h2 className="font-semibold text-gray-800 text-[10px] truncate flex-1">
-          {title === "New Orders" ? "New" : title}
+    <div
+      className={cn(
+        "flex flex-col h-full rounded-lg sm:rounded-2xl shadow-md border-2 min-w-0 max-h-full transition-all duration-300 ease-in-out font-sans",
+        theme.bg,
+        theme.border,
+        // Enhanced drag over effects
+        isDragOver && isValidDropTarget && theme.dragOverBg,
+        isDragOver && !isValidDropTarget && "bg-red-100 border-red-400 shadow-lg",
+        // Pulse animation when valid drop target
+        isDragOver && isValidDropTarget && "animate-pulse",
+        // Disabled state for invalid drops
+        !isValidDropTarget && draggedOrder && "opacity-60 cursor-not-allowed",
+      )}
+      // Make entire column a drop zone
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Compact Mobile Header */}
+      <div
+        className={cn(
+          "flex items-center gap-1 p-1 sm:p-2 border-b-2 flex-shrink-0 transition-all duration-200 rounded-t-lg sm:rounded-t-2xl",
+          theme.headerBg,
+          theme.border,
+          isDragOver && isValidDropTarget && "bg-alfamart-yellow/30",
+          isDragOver && !isValidDropTarget && "bg-red-200",
+        )}
+      >
+        <div className={cn("w-2 h-2 sm:w-3 sm:h-3 rounded-full shadow-sm", theme.icon)}></div>
+        <h2
+          className={cn(
+            "font-black text-[8px] sm:text-[10px] truncate flex-1 transition-colors duration-200 tracking-wide",
+            theme.textColor,
+            isDragOver && isValidDropTarget && "text-alfamart-blue",
+            isDragOver && !isValidDropTarget && "text-red-700",
+          )}
+        >
+          {status === "pending" ? "NEW" : status === "preparing" ? "PREP" : "READY"}
         </h2>
-        <div className="bg-gray-100 text-gray-600 text-[9px] px-1 py-0.5 rounded-full min-w-[16px] text-center">
+        <div
+          className={cn(
+            "text-white text-[8px] sm:text-[9px] px-1 sm:px-1.5 py-0.5 rounded-full min-w-[14px] sm:min-w-[18px] text-center font-bold shadow-sm transition-all duration-200",
+            theme.icon,
+            isDragOver && isValidDropTarget && "bg-alfamart-yellow text-alfamart-red",
+            isDragOver && !isValidDropTarget && "bg-red-500",
+          )}
+        >
           {orders.length}
         </div>
       </div>
 
-      {/* Drop Zone Box - More compact */}
-      <div
-        onDragOver={handleDragOver}
-        onDragEnter={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        className={cn(
-          "mx-1 mt-1 p-1 text-center border-2 border-dashed rounded-lg transition-all duration-200 flex-shrink-0",
-          "min-h-[20px]", // Smaller minimum height
-          isDragOver && isValidDropTarget
-            ? "border-blue-400 bg-blue-50 scale-105 shadow-md"
-            : isDragOver && !isValidDropTarget
-              ? "border-red-400 bg-red-50"
-              : "border-gray-300 bg-gray-50 hover:bg-gray-100",
-          !isValidDropTarget && "opacity-50 cursor-not-allowed",
-        )}
-      >
-        <div className="text-[9px] font-medium text-gray-500">
-          {!isValidDropTarget ? (
-            <span className="text-red-400">✗</span>
-          ) : isDragOver ? (
-            <span className="text-blue-600">Drop</span>
-          ) : (
-            <span>Drop</span>
+      {/* Drop indicator overlay - Mobile optimized */}
+      {isDragOver && (
+        <div
+          className={cn(
+            "absolute inset-0 flex items-center justify-center z-10 rounded-lg sm:rounded-2xl transition-all duration-200",
+            isValidDropTarget
+              ? "bg-alfamart-blue-light/90 border-2 border-dashed border-alfamart-blue"
+              : "bg-red-100/90 border-2 border-dashed border-red-400",
           )}
+        >
+          <div
+            className={cn(
+              "text-center p-1 sm:p-2 rounded-lg font-black text-[8px] sm:text-sm shadow-lg",
+              isValidDropTarget
+                ? "text-alfamart-blue bg-white/95 border-2 border-alfamart-yellow"
+                : "text-red-700 bg-white/95 border-2 border-red-300",
+            )}
+          >
+            {isValidDropTarget ? (
+              <>
+                <div className="text-sm sm:text-lg mb-0.5 sm:mb-1">📦</div>
+                <div className="font-black">DROP</div>
+              </>
+            ) : (
+              <>
+                <div className="text-sm sm:text-lg mb-0.5 sm:mb-1">🚫</div>
+                <div className="font-black">NO</div>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Orders List - More compact spacing */}
-      <div className="flex-1 overflow-y-auto p-1 space-y-1 min-h-0">
+      {/* Orders List - Mobile optimized */}
+      <div className="flex-1 overflow-y-auto p-0.5 sm:p-1 space-y-0.5 sm:space-y-1 min-h-0 relative">
         {orders.length === 0 ? (
-          <div className="text-center text-gray-400 py-4 text-[9px]">No orders</div>
+          <div className={cn("text-center py-2 sm:py-4 text-[8px] sm:text-[9px] font-bold", theme.textColor)}>
+            No orders
+          </div>
         ) : (
           orders.map((order) => (
             <OrderCard

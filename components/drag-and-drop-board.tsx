@@ -145,6 +145,13 @@ export function DragAndDropBoard() {
 
       console.log(`Updating order ${orderId} status to ${newStatus}`)
 
+      // Show success animation
+      const successToast = toast({
+        title: "✅ Success!",
+        description: `Order moved to ${statusDisplayNames[newStatus]}`,
+        duration: 2000,
+      })
+
       // Optimistically update the UI first for immediate feedback
       setOrders((prevOrders) =>
         prevOrders.map((order) => (order.id === orderId ? { ...order, status: newStatus } : order)),
@@ -153,12 +160,6 @@ export function DragAndDropBoard() {
       // Update the database
       const result = await updateOrderStatus(orderId, newStatus)
       console.log("Database update result:", result)
-
-      // Show success message
-      toast({
-        title: "Success",
-        description: `Order moved to ${statusDisplayNames[newStatus]}`,
-      })
 
       // Refresh orders after a short delay to ensure consistency with database
       setTimeout(() => {
@@ -171,7 +172,7 @@ export function DragAndDropBoard() {
       loadOrders(true)
 
       toast({
-        title: "Error",
+        title: "❌ Error",
         description: "Failed to update order status. Please try again.",
         variant: "destructive",
       })
@@ -183,7 +184,7 @@ export function DragAndDropBoard() {
     }
   }
 
-  // Drag and Drop handlers using native HTML5 API
+  // Enhanced Drag and Drop handlers
   const handleDragOver = (e, columnStatus) => {
     e.preventDefault()
     e.stopPropagation()
@@ -202,7 +203,7 @@ export function DragAndDropBoard() {
         setDragOverColumn(columnStatus)
       } else {
         e.dataTransfer.dropEffect = "none"
-        setDragOverColumn(null)
+        setDragOverColumn(columnStatus) // Still set for visual feedback
       }
     }
   }
@@ -225,9 +226,44 @@ export function DragAndDropBoard() {
 
     if (draggedOrderData && isValidDrop(draggedOrderData.status, targetStatus)) {
       console.log("Valid drop - updating status")
+
+      // Play success sound
+      const audio = new Audio("/sounds/success-drop.mp3")
+      audio.play().catch(() => {
+        // Fallback: create a simple beep sound
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+        const oscillator = audioContext.createOscillator()
+        const gainNode = audioContext.createGain()
+
+        oscillator.connect(gainNode)
+        gainNode.connect(audioContext.destination)
+
+        oscillator.frequency.value = 800
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1)
+
+        oscillator.start(audioContext.currentTime)
+        oscillator.stop(audioContext.currentTime + 0.1)
+      })
+
       handleStatusChange(draggedOrderId, targetStatus)
     } else {
       console.log("Invalid drop")
+
+      // Play error sound
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+
+      oscillator.frequency.value = 300
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2)
+
+      oscillator.start(audioContext.currentTime)
+      oscillator.stop(audioContext.currentTime + 0.2)
     }
 
     setDragOverColumn(null)
@@ -262,34 +298,34 @@ export function DragAndDropBoard() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-screen bg-gradient-to-br from-soft-purple to-lavender-100 p-6 items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-dark-purple mb-4"></div>
-        <p className="text-dark-purple">Loading orders...</p>
+      <div className="flex flex-col h-screen bg-gradient-to-br from-alfamart-blue-light to-alfamart-red-light p-6 items-center justify-center font-sans">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-alfamart-blue border-t-transparent mb-4"></div>
+        <p className="text-alfamart-blue font-bold text-lg">Loading Alfamart Orders...</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Mobile Header - More compact */}
-      <div className="sticky top-0 z-10 bg-white border-b shadow-sm">
-        <div className="p-3">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-alfamart-blue/5 font-sans">
+      {/* Compact Mobile Header */}
+      <div className="sticky top-0 z-10 bg-gradient-to-r from-alfamart-blue to-alfamart-red border-b-2 border-alfamart-yellow shadow-lg">
+        <div className="p-2 sm:p-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-base font-bold text-gray-900">Orders</h1>
+            <h1 className="text-sm sm:text-lg font-black text-white tracking-wide drop-shadow-sm">Alfamart Orders</h1>
             <div className="flex items-center space-x-2">
               {refreshing && (
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600 mr-1"></div>
+                <div className="flex items-center text-xs text-white/90">
+                  <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent mr-1"></div>
                 </div>
               )}
               {updatingOrderId && (
-                <div className="flex items-center text-sm text-blue-600">
-                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-1"></div>
+                <div className="flex items-center text-xs text-alfamart-yellow">
+                  <div className="animate-spin rounded-full h-3 w-3 border-2 border-alfamart-yellow border-t-transparent mr-1"></div>
                 </div>
               )}
               <button
                 onClick={() => loadOrders(true)}
-                className="px-2 py-1 bg-gray-800 text-white rounded text-xs hover:bg-gray-700 transition-colors"
+                className="px-2 py-1 sm:px-4 sm:py-2 bg-white text-alfamart-blue rounded-md text-xs sm:text-sm font-bold hover:bg-alfamart-yellow hover:text-alfamart-red transition-all duration-200 shadow-md"
               >
                 Refresh
               </button>
@@ -298,54 +334,29 @@ export function DragAndDropBoard() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="p-2">
-        {/* Mobile: Three columns with horizontal scroll - Ultra compact */}
-        <div className="block md:hidden">
-          <div className="flex gap-2 overflow-x-auto pb-2" style={{ minWidth: "fit-content" }}>
-            {orderStatuses.map((status) => (
-              <div key={status} className="flex-shrink-0 w-28 h-[calc(100vh-100px)]">
-                <StatusColumn
-                  title={statusDisplayNames[status]}
-                  status={status}
-                  orders={getOrdersByStatus(status)}
-                  onClickOrder={handleOrderClick}
-                  onStatusChange={handleStatusChange}
-                  highlightReady={status === "ready"}
-                  updatingOrderId={updatingOrderId}
-                  // Drag and drop props
-                  onDragOver={(e) => handleDragOver(e, status)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, status)}
-                  isDragOver={dragOverColumn === status}
-                  draggedOrder={draggedOrder}
-                  isValidDropTarget={draggedOrder ? isValidDrop(draggedOrder.status, status) : false}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Desktop: Grid layout */}
-        <div className="hidden md:grid md:grid-cols-3 gap-6">
+      {/* Main Content - Optimized for Mobile */}
+      <div className="p-1 sm:p-3">
+        {/* Mobile: Three equal columns that fit on screen */}
+        <div className="grid grid-cols-3 gap-1 sm:gap-3 h-[calc(100vh-80px)] sm:h-[calc(100vh-100px)]">
           {orderStatuses.map((status) => (
-            <StatusColumn
-              key={status}
-              title={statusDisplayNames[status]}
-              status={status}
-              orders={getOrdersByStatus(status)}
-              onClickOrder={handleOrderClick}
-              onStatusChange={handleStatusChange}
-              highlightReady={status === "ready"}
-              updatingOrderId={updatingOrderId}
-              // Drag and drop props
-              onDragOver={(e) => handleDragOver(e, status)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, status)}
-              isDragOver={dragOverColumn === status}
-              draggedOrder={draggedOrder}
-              isValidDropTarget={draggedOrder ? isValidDrop(draggedOrder.status, status) : false}
-            />
+            <div key={status} className="min-w-0 h-full">
+              <StatusColumn
+                title={statusDisplayNames[status]}
+                status={status}
+                orders={getOrdersByStatus(status)}
+                onClickOrder={handleOrderClick}
+                onStatusChange={handleStatusChange}
+                highlightReady={status === "ready"}
+                updatingOrderId={updatingOrderId}
+                // Drag and drop props
+                onDragOver={(e) => handleDragOver(e, status)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, status)}
+                isDragOver={dragOverColumn === status}
+                draggedOrder={draggedOrder}
+                isValidDropTarget={draggedOrder ? isValidDrop(draggedOrder.status, status) : false}
+              />
+            </div>
           ))}
         </div>
       </div>
