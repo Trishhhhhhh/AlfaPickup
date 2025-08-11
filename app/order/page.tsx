@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -98,6 +99,8 @@ export default function OrderPage() {
   const [orderId, setOrderId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  
+  const router = useRouter()
 
   useEffect(() => {
     setMounted(true)
@@ -191,13 +194,16 @@ export default function OrderPage() {
       
       // Print receipt automatically
       console.log('🖨️ Printing receipt for order:', orderResponse.id)
-      alert(`🖨️ About to print receipt for order: ${orderResponse.id}`)
       await PrintService.printReceipt(receiptData)
 
-      setOrderId(orderResponse.id)
-      setOrderComplete(true)
+      // 🚀 AUTOMATIC REDIRECT TO TRACK ORDER PAGE
+      // Instead of showing success screen, redirect immediately
+      router.push(`/track-order?orderId=${orderResponse.id}`)
+      
+      // Reset form state
       setCart([])
       setCustomer({ name: "", phone: "", email: "" })
+      
     } catch (error) {
       console.error('❌ Error creating order:', error)
       alert(`Failed to place order: ${error.message}`)
@@ -207,68 +213,6 @@ export default function OrderPage() {
   }
 
   if (!mounted) return null
-
-  if (orderComplete) {
-    const handleManualPrint = async () => {
-      const receiptData = {
-        id: orderId,
-        customerName: customer.name || 'Previous Customer',
-        customerPhone: customer.phone || '09123456789',
-        items: [{ name: 'Previous Order Items', quantity: 1, price: 100 }],
-        total: 100
-      }
-      
-      alert('🖨️ Manual print test...')
-      const success = await PrintService.printReceipt(receiptData)
-      if (success) {
-        alert('✅ Manual print completed!')
-      } else {
-        alert('❌ Manual print failed!')
-      }
-    }
-
-    return (
-      <div className="container mx-auto p-4 max-w-2xl">
-        <Card className="bg-green-50 border-green-200">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
-              <ShoppingCart className="h-8 w-8 text-green-600" />
-            </div>
-            <CardTitle className="text-2xl text-green-700">Order Placed Successfully!</CardTitle>
-            <CardDescription className="text-green-600">
-              Your order #{orderId} has been received and is being prepared.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-center space-y-4">
-            <div className="text-sm text-gray-600">
-              You will receive updates about your order status.
-            </div>
-            
-            {/* 🖨️ MANUAL PRINT BUTTON */}
-            <Button 
-              onClick={handleManualPrint} 
-              variant="outline" 
-              className="w-full mb-4 border-blue-300 text-blue-600 hover:bg-blue-50"
-            >
-              🖨️ Print Receipt Again
-            </Button>
-            
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button onClick={() => window.location.href = `/track-order?id=${orderId}`} className="flex-1">
-                Track Your Order
-              </Button>
-              <Button variant="outline" onClick={() => {
-                setOrderComplete(false)
-                setOrderId(null)
-              }} className="flex-1">
-                Place Another Order
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -414,7 +358,7 @@ export default function OrderPage() {
                   </div>
                 </CardContent>
               </Card>
-              <Button type="submit" className="w-full" disabled={submitting}>
+              <Button type="submit" className="w-full" disabled={submitting || cart.length === 0}>
                 {submitting ? 'Placing Order...' : 'Place Order'}
               </Button>
             </form>

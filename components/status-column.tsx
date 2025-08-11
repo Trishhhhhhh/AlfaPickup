@@ -1,167 +1,134 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import type React from "react"
 import { OrderCard } from "./order-card"
-import { useDrop } from "react-dnd"
-import { ItemTypes } from "@/lib/item-types"
-import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
 interface StatusColumnProps {
   title: string
+  status: string
   orders: any[]
   onClickOrder: (order: any) => void
   onStatusChange: (orderId: string, newStatus: string) => void
   highlightReady?: boolean
-  updatingOrderId?: string | null // Add this prop to track which order is updating
+  updatingOrderId?: string | null
+  // New drag and drop props
+  onDragOver?: (e: React.DragEvent) => void
+  onDragLeave?: (e: React.DragEvent) => void
+  onDrop?: (e: React.DragEvent) => void
+  isDragOver?: boolean
+  draggedOrder?: any
+  isValidDropTarget?: boolean
 }
 
-export function StatusColumn({ 
-  title, 
-  orders, 
-  onClickOrder, 
+export function StatusColumn({
+  title,
+  status,
+  orders,
+  onClickOrder,
   onStatusChange,
   highlightReady = false,
-  updatingOrderId = null
+  updatingOrderId = null,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  isDragOver = false,
+  draggedOrder,
+  isValidDropTarget = true,
 }: StatusColumnProps) {
-  
-  // Map display titles to database status values
-  const statusMapping = {
-    "New": "pending",
-    "Preparing": "preparing", 
-    "Ready": "ready"
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    // Ensure we can accept the drop
+    e.dataTransfer.dropEffect = "move"
+
+    console.log("Drag over column:", status)
+
+    if (onDragOver) {
+      onDragOver(e)
+    }
   }
 
-  const [{ isOver, canDrop }, drop] = useDrop(() => ({
-    accept: ItemTypes.ORDER,
-    drop: (item: { id: string; currentStatus: string; orderNumber: string; status: string }, monitor) => {
-      // Prevent dropping if already processed by a nested target
-      if (monitor.didDrop()) {
-        return
-      }
-      
-      const newStatus = statusMapping[title] || title.toLowerCase()
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.stopPropagation()
+    if (onDragLeave) {
+      onDragLeave(e)
+    }
+  }
 
-      console.log('Dropping order:', item.id, 'from', item.currentStatus, 'to', newStatus)
-      console.log('Orders in column:', orders.length, 'Target status:', newStatus)
-      
-      // Only process if status is actually changing
-      if (item.currentStatus !== newStatus && item.status !== newStatus) {
-        const orderToUpdate = orders.find((o) => o.id === item.id) || 
-                            // If not in current column, find in all available orders
-                            { id: item.id, orderNumber: item.orderNumber, customerName: 'Customer' }
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
 
-        console.log('Order to update:', orderToUpdate)
+    console.log("Drop event in column:", status)
 
-        if (orderToUpdate) {
-          // Call the parent component's status change handler
-          onStatusChange(item.id, newStatus)
-
-          // Show immediate feedback
-          toast({
-            title: "Order Updated",
-            description: `Order ${item.orderNumber} moved to ${title}`,
-          })
-
-          // If the order is moved to "Ready", show notification toast
-          if (newStatus === "ready") {
-            setTimeout(() => {
-              toast({
-                title: "Order Ready!",
-                description: `Order ${item.orderNumber} is now ready for pickup.`,
-              })
-              
-              // Optional: You could add actual SMS/email notification here
-              setTimeout(() => {
-                toast({
-                  title: "Customer Notified",
-                  description: `Customer has been notified that order ${item.orderNumber} is ready.`,
-                })
-              }, 1000)
-            }, 500)
-          }
-        }
-      }
-    },
-    collect: (monitor) => ({
-      isOver: monitor.isOver({ shallow: true }),
-      canDrop: monitor.canDrop(),
-    }),
-  }))
-
-  const isActive = isOver && canDrop
+    if (onDrop) {
+      onDrop(e)
+    }
+  }
 
   return (
-    <div
-      ref={drop}
-      className={cn(
-        "flex flex-col h-full bg-white border-2 border-dashed border-alfamart-blue/50 p-1 sm:p-2 md:p-4 rounded-lg shadow-inner min-w-0 transition-all duration-200 ease-in-out",
-        isActive ? "border-alfamart-blue bg-alfamart-blue/20 scale-[1.02]" : "",
-        isOver && !canDrop ? "border-red-400 bg-red-50" : "",
-        highlightReady && title === "Ready" ? "bg-green-50 border-green-300" : ""
-      )}
-    >
-      <Card className="flex flex-col h-full bg-transparent border-none shadow-none p-0">
-        <CardHeader className="pb-2 px-0">
-          <CardTitle className={cn(
-            "text-sm sm:text-base md:text-xl font-bold text-center py-2 rounded-lg transition-colors",
-            title === "New" && "text-blue-700 bg-blue-100",
-            title === "Preparing" && "text-orange-700 bg-orange-100", 
-            title === "Ready" && "text-green-700 bg-green-100",
-            isActive && "ring-2 ring-alfamart-blue ring-offset-2"
-          )}>
-            {title} ({orders.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto space-y-1 sm:space-y-2 md:space-y-3 px-0 pb-0 custom-scrollbar">
-          {orders.length === 0 ? (
-            <div className="text-center text-gray-400 py-8 text-sm relative">
-              <div className="mb-2">No orders in {title.toLowerCase()}</div>
-              {isActive && (
-                <div className="text-alfamart-blue font-medium animate-bounce">
-                  Drop order here
-                </div>
-              )}
-            </div>
-          ) : (
-            orders.map((order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                onClick={onClickOrder}
-                highlight={highlightReady && order.status === "ready"}
-                isUpdating={updatingOrderId === order.id} // Pass the updating state
-              />
-            ))
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Drop zone overlay when actively dragging over */}
-      {isActive && (
-        <div className="absolute inset-2 border-2 border-dashed border-alfamart-blue rounded-lg bg-alfamart-blue/10 flex items-center justify-center pointer-events-none">
-          <div className="bg-white px-4 py-2 rounded-lg shadow-lg">
-            <p className="text-alfamart-blue font-bold">Drop order here</p>
-          </div>
+    <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border min-w-0 max-h-full">
+      {/* Column Header - More compact with smaller fonts */}
+      <div className="flex items-center gap-1 p-1.5 border-b flex-shrink-0">
+        <div className="w-2 h-2">
+          {title === "New Orders" && <div className="w-2 h-2 rounded-full bg-blue-500"></div>}
+          {title === "Preparing" && <div className="w-2 h-2 rounded-full bg-orange-500"></div>}
+          {title === "Ready" && <div className="w-2 h-2 rounded-full bg-green-500"></div>}
         </div>
-      )}
-      
-      <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: #f1f1f1;
-          border-radius: 3px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #c1c1c1;
-          border-radius: 3px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #a1a1a1;
-        }
-      `}</style>
+        <h2 className="font-semibold text-gray-800 text-[10px] truncate flex-1">
+          {title === "New Orders" ? "New" : title}
+        </h2>
+        <div className="bg-gray-100 text-gray-600 text-[9px] px-1 py-0.5 rounded-full min-w-[16px] text-center">
+          {orders.length}
+        </div>
+      </div>
+
+      {/* Drop Zone Box - More compact */}
+      <div
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={cn(
+          "mx-1 mt-1 p-1 text-center border-2 border-dashed rounded-lg transition-all duration-200 flex-shrink-0",
+          "min-h-[20px]", // Smaller minimum height
+          isDragOver && isValidDropTarget
+            ? "border-blue-400 bg-blue-50 scale-105 shadow-md"
+            : isDragOver && !isValidDropTarget
+              ? "border-red-400 bg-red-50"
+              : "border-gray-300 bg-gray-50 hover:bg-gray-100",
+          !isValidDropTarget && "opacity-50 cursor-not-allowed",
+        )}
+      >
+        <div className="text-[9px] font-medium text-gray-500">
+          {!isValidDropTarget ? (
+            <span className="text-red-400">✗</span>
+          ) : isDragOver ? (
+            <span className="text-blue-600">Drop</span>
+          ) : (
+            <span>Drop</span>
+          )}
+        </div>
+      </div>
+
+      {/* Orders List - More compact spacing */}
+      <div className="flex-1 overflow-y-auto p-1 space-y-1 min-h-0">
+        {orders.length === 0 ? (
+          <div className="text-center text-gray-400 py-4 text-[9px]">No orders</div>
+        ) : (
+          orders.map((order) => (
+            <OrderCard
+              key={order.id}
+              order={order}
+              onClick={onClickOrder}
+              highlight={highlightReady && order.status === "ready"}
+              isUpdating={updatingOrderId === order.id}
+            />
+          ))
+        )}
+      </div>
     </div>
   )
 }
